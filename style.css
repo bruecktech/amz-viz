@@ -1,0 +1,20 @@
+.vpc {
+    border-color: red;
+    border-style: solid;
+    background-color: red;
+    float: left;
+    margin: 5pt;
+}
+
+.subnet {
+    background-color: yellow;
+    border-color: yellow;
+    border-style: solid;
+
+}
+
+.instance {
+    background-color: green;
+    border-color: green;
+    border-style: solid;
+}
