@@ -1,8 +1,9 @@
 package main
 
-import "fmt"
+//import "fmt"
 import "github.com/awslabs/aws-sdk-go/aws"
 import "github.com/awslabs/aws-sdk-go/gen/ec2"
+import "github.com/gin-gonic/gin"
 
 var creds = aws.DetectCreds("","","")
 var cli = ec2.New(creds,"eu-west-1",nil)
@@ -40,7 +41,7 @@ func tagByKey(tags []ec2.Tag, key string) string {
 }
 
 func htmlHeader() string {
-  return "<html><head><title></title><link rel=\"stylesheet\" type=\"text/css\" href=\"style.css\" /></head><body>"
+  return "<html><head><title></title><link rel=\"stylesheet\" type=\"text/css\" href=\"/assets/style.css\" /></head><body>"
 }
 
 func divTagOpen(class string, label string) string {
@@ -55,31 +56,42 @@ func htmlFooter() string {
   return "</body></html>"
 }
 
-func main() {
-  fmt.Println(htmlHeader())
+func viz(c *gin.Context){
+
+  s := ""
+
+  s += htmlHeader()
+
   resp, err := cli.DescribeVPCs(nil)
   if err != nil {
     panic(err)
   }
   for _, vpc := range resp.VPCs {
-    //fmt.Println(*vpc.VPCID + " (" + tagByKey(vpc.Tags, "Name") + ")")
-    fmt.Println(divTagOpen("vpc", *vpc.VPCID + " (" + tagByKey(vpc.Tags, "Name") + ")"))
+    s += divTagOpen("vpc", *vpc.VPCID + " (" + tagByKey(vpc.Tags, "Name") + ")")
     subnets := subnetsByVPCID(*vpc.VPCID)
     for _, subnet := range subnets {
-      //fmt.Print("|-")
-      //fmt.Println(*subnet.SubnetID + " (" + tagByKey(subnet.Tags, "Name") + ")")
-      fmt.Println(divTagOpen("subnet", *subnet.SubnetID + " (" + tagByKey(subnet.Tags, "Name") + ")"))
+      s += divTagOpen("subnet", *subnet.SubnetID + " (" + tagByKey(subnet.Tags, "Name") + ")")
 
       instances := instancesBySubnet(*subnet.SubnetID)
       for _, instance := range instances {
-        //fmt.Print("  |-")
-        //fmt.Println(*instance.InstanceID + " (" + tagByKey(instance.Tags, "Name") + ")")
-        fmt.Println(divTagOpen("instance", *instance.InstanceID + " (" + tagByKey(instance.Tags, "Name") + ")"))
-        fmt.Println(divTagClose())
+        s += divTagOpen("instance", *instance.InstanceID + " (" + tagByKey(instance.Tags, "Name") + ")")
+        s += divTagClose()
       }
-      fmt.Println(divTagClose())
+      s += divTagClose()
     }
-    fmt.Println(divTagClose())
+    s += divTagClose()
   }
-  fmt.Println(htmlFooter())
+  s += htmlFooter()
+
+  c.Data(200, "text/html", []byte(s))
+}
+
+func main() {
+  // Creates a gin router + logger and recovery (crash-free) middlewares
+  r := gin.Default()
+  r.GET("/viz/", viz)
+  r.Static("/assets", "./assets")
+
+  // Listen and server on 0.0.0.0:8080
+  r.Run(":8080")
 }
