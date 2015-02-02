@@ -1,97 +1,109 @@
 package main
 
 //import "fmt"
-import "github.com/awslabs/aws-sdk-go/aws"
-import "github.com/awslabs/aws-sdk-go/gen/ec2"
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/awslabs/aws-sdk-go/aws"
+	"github.com/awslabs/aws-sdk-go/gen/ec2"
+	"github.com/gin-gonic/gin"
+	//	"html/template"
+)
 
-var creds = aws.DetectCreds("","","")
-var cli = ec2.New(creds,"eu-west-1",nil)
+var (
+	creds = aws.DetectCreds("", "", "")
+	cli   = ec2.New(creds, "eu-west-1", nil)
+)
 
 func subnetsByVPCID(VPCID string) []ec2.Subnet {
-  resp, err := cli.DescribeSubnets(&ec2.DescribeSubnetsRequest { Filters: []ec2.Filter{ ec2.Filter { aws.String("vpc-id"), []string{VPCID}}}})
-  if err != nil {
-    panic(err)
-  }
-  return resp.Subnets
+	resp, err := cli.DescribeSubnets(&ec2.DescribeSubnetsRequest{Filters: []ec2.Filter{ec2.Filter{aws.String("vpc-id"), []string{VPCID}}}})
+	if err != nil {
+		panic(err)
+	}
+	return resp.Subnets
 }
 
 func instancesBySubnet(SubnetID string) []ec2.Instance {
-  resp, err := cli.DescribeInstances(&ec2.DescribeInstancesRequest { Filters: []ec2.Filter{ ec2.Filter { aws.String("subnet-id"), []string{SubnetID}}}})
-  if err != nil {
-    panic(err)
-  }
+	resp, err := cli.DescribeInstances(&ec2.DescribeInstancesRequest{Filters: []ec2.Filter{ec2.Filter{aws.String("subnet-id"), []string{SubnetID}}}})
+	if err != nil {
+		panic(err)
+	}
 
-  var instances []ec2.Instance
+	var instances []ec2.Instance
 
-  for _, reservation := range resp.Reservations {
-    instances = append(instances, reservation.Instances...)
-  }
-  return instances
+	for _, reservation := range resp.Reservations {
+		instances = append(instances, reservation.Instances...)
+	}
+	return instances
 }
 
 func tagByKey(tags []ec2.Tag, key string) string {
-  for _, tag := range tags {
-    if *tag.Key == key {
-      return *tag.Value
-    }
-  }
+	for _, tag := range tags {
+		if *tag.Key == key {
+			return *tag.Value
+		}
+	}
 
-  return ""
+	return ""
 }
 
-func htmlHeader() string {
-  return "<html><head><title></title><link rel=\"stylesheet\" type=\"text/css\" href=\"/assets/style.css\" /></head><body>"
-}
+func viz(c *gin.Context) {
+	type VPC struct {
+		VPCID string
+		Name  string
+	}
+	var vpcList []VPC
 
-func divTagOpen(class string, label string) string {
-  return "<div class=\"" + class + "\">" + label
-}
+	type Subnet struct {
+		SubnetID string
+		Name     string
+	}
+	var subnetList []Subnet
 
-func divTagClose() string {
-  return "</div>"
-}
+	type Instance struct {
+		InstanceID string
+		Name       string
+	}
+	var instanceList []Instance
 
-func htmlFooter() string {
-  return "</body></html>"
-}
+	resp, err := cli.DescribeVPCs(nil)
+	if err != nil {
+		panic(err)
+	}
+	for _, vpc := range resp.VPCs {
+		vpcList = append(vpcList, VPC{
+			VPCID: *vpc.VPCID,
+			Name:  tagByKey(vpc.Tags, "Name")})
 
-func viz(c *gin.Context){
+		subnets := subnetsByVPCID(*vpc.VPCID)
+		for _, subnet := range subnets {
+			subnetList = append(subnetList, Subnet{
+				SubnetID: *subnet.SubnetID,
+				Name:     tagByKey(subnet.Tags, "Name")})
 
-  s := ""
+			instances := instancesBySubnet(*subnet.SubnetID)
 
-  s += htmlHeader()
+			for _, instance := range instances {
+				instanceList = append(instanceList, Instance{
+					InstanceID: *instance.InstanceID,
+					Name:       tagByKey(instance.Tags, "Name")})
 
-  resp, err := cli.DescribeVPCs(nil)
-  if err != nil {
-    panic(err)
-  }
-  for _, vpc := range resp.VPCs {
-    s += divTagOpen("vpc", *vpc.VPCID + " (" + tagByKey(vpc.Tags, "Name") + ")")
-    subnets := subnetsByVPCID(*vpc.VPCID)
-    for _, subnet := range subnets {
-      s += divTagOpen("subnet", *subnet.SubnetID + " (" + tagByKey(subnet.Tags, "Name") + ")")
+			}
+		}
+	}
 
-      instances := instancesBySubnet(*subnet.SubnetID)
-      for _, instance := range instances {
-        s += divTagOpen("instance", *instance.InstanceID + " (" + tagByKey(instance.Tags, "Name") + ")")
-        s += divTagClose()
-      }
-      s += divTagClose()
-    }
-    s += divTagClose()
-  }
-  s += htmlFooter()
+	obj := gin.H{"vpcs": vpcList,
+		"subnets":   subnetList,
+		"instances": instanceList}
+	c.HTML(200, "layout.tmpl", obj)
 
-  c.Data(200, "text/html", []byte(s))
 }
 
 func main() {
-  // Creates a gin router + logger and recovery (crash-free) middlewares
-  r := gin.Default()
-  r.GET("/viz/", viz)
-  r.Static("/assets", "./assets")
+	// Creates a gin router + logger and recovery (crash-free) middlewares
+	r := gin.Default()
+	r.LoadHTMLGlob("templates/*")
+	r.GET("/viz", viz)
+	r.Static("/assets", "./assets")
 
-  // Listen and server on 0.0.0.0:8080
-  r.Run(":8080")
+	// Listen and server on 0.0.0.0:8080
+	r.Run(":8080")
 }

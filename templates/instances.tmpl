@@ -1,0 +1,7 @@
+{{define "instances"}}
+  {{ range $instance := .instances }}
+  <div class="instance">
+    {{$instance.InstanceID}} ({{$instance.Name}})
+  </div>
+  {{ end }}
+{{end}}
