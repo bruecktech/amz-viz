@@ -1,0 +1,8 @@
+{{define "vpcs"}}
+  {{range $vpc := .VPCs}}
+    <div class="vpc">
+      {{$vpc.VPCID}} ({{$vpc.Name}})
+      {{template "subnets" .}}
+    </div>
+  {{end}}
+{{end}}

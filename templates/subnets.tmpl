@@ -1,0 +1,8 @@
+{{define "subnets"}}
+  {{range $subnet := .Subnets}}
+    <div class="subnet">
+      {{$subnet.SubnetID}} ({{$subnet.Name}})
+      {{template "instances" .}}
+    </div>
+  {{end}}
+{{end}}

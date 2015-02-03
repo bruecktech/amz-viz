@@ -1,0 +1,8 @@
+{{define "stacks"}}
+  {{range $stack := .Stacks}}
+    <div class="stack">
+      {{$stack.Name}}
+      {{template "resources" .}}
+    </div>
+  {{end}}
+{{end}}

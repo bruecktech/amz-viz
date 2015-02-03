@@ -1,7 +1,0 @@
-{{define "vpc"}}
-  {{range $vpc := .vpcs}}
-    <div class="vpc">
-      {{template "subnet" .}}
-    </div>
-  {{end}}
-{{end}}
