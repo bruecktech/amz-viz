@@ -9,13 +9,17 @@ import (
 	"github.com/awslabs/aws-sdk-go/gen/cloudformation"
 	"github.com/awslabs/aws-sdk-go/gen/ec2"
 	"github.com/gin-gonic/gin"
+	"github.com/robfig/cron"
+	"time"
 )
 
 var (
-	creds = aws.DetectCreds("", "", "")
-	cli   = ec2.New(creds, "eu-west-1", nil)
-	cfn   = cloudformation.New(creds, "eu-west-1", nil)
-	asg   = autoscaling.New(creds, "eu-west-1", nil)
+	creds   = aws.DetectCreds("", "", "")
+	cli     = ec2.New(creds, "eu-west-1", nil)
+	cfn     = cloudformation.New(creds, "eu-west-1", nil)
+	asg     = autoscaling.New(creds, "eu-west-1", nil)
+	data    = gin.H{}
+	handler = websocket.Handler(onConnected)
 )
 
 func resourcesByStackName(StackName string) []cloudformation.StackResource {
@@ -133,7 +137,7 @@ func vpc(c *gin.Context) {
 
 }
 
-func stack(c *gin.Context) {
+func fetchData() {
 
 	type Instance struct {
 		InstanceID string
@@ -216,37 +220,35 @@ func stack(c *gin.Context) {
 		stackList = append(stackList, tStack)
 	}
 
-	obj := gin.H{"Stacks": stackList}
-	//c.HTML(200, "layout_stack.tmpl", obj)
-	//c.JSON(200, obj)
+	data = gin.H{"Stacks": stackList}
+}
 
-	// websocket handler
-	onConnected := func(ws *websocket.Conn) {
-		var err error
+// websocket handler
+func onConnected(ws *websocket.Conn) {
+	var err error
 
-		//	for {
+	//	for {
 
-		//var reply string
-		//if err = websocket.Message.Receive(ws, &reply); err != nil {
-		//	fmt.Println("Can't receive")
-		//	break
-		//}
+	//var reply string
+	//if err = websocket.Message.Receive(ws, &reply); err != nil {
+	//	fmt.Println("Can't receive")
+	//	break
+	//}
 
-		//fmt.Println("Received back from client: " + reply)
+	//fmt.Println("Received back from client: " + reply)
 
-		//msg := "Received:  " + reply
-		json, _ := json.Marshal(obj)
+	//msg := "Received:  " + reply
+	json, _ := json.Marshal(data)
 
-		if err = websocket.Message.Send(ws, string(json)); err != nil {
-			fmt.Println("Can't send")
-			//break
-		}
-		//	}
+	if err = websocket.Message.Send(ws, string(json)); err != nil {
+		fmt.Println("Can't send")
+		//break
 	}
+	//	}
+}
 
-	handler := websocket.Handler(onConnected)
+func stack(c *gin.Context) {
 	handler.ServeHTTP(c.Writer, c.Request)
-
 }
 
 func layout(c *gin.Context) {
@@ -254,6 +256,9 @@ func layout(c *gin.Context) {
 }
 
 func main() {
+	fetchData()
+	c := cron.New()
+	c.AddFunc("@every 1m", fetchData)
 	// Creates a gin router + logger and recovery (crash-free) middlewares
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*tmpl")
@@ -264,4 +269,5 @@ func main() {
 
 	// Listen and server on 0.0.0.0:8080
 	r.Run(":8080")
+	c.Stop()
 }
