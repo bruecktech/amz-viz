@@ -1,6 +1,9 @@
 package main
 
 import (
+	"code.google.com/p/go.net/websocket"
+	"encoding/json"
+	"fmt"
 	"github.com/awslabs/aws-sdk-go/aws"
 	"github.com/awslabs/aws-sdk-go/gen/autoscaling"
 	"github.com/awslabs/aws-sdk-go/gen/cloudformation"
@@ -149,10 +152,16 @@ func stack(c *gin.Context) {
 		PhysicalResourceID string
 	}
 
-	type Stack struct {
+	type AutoScalingGroup struct {
 		Name      string
-		Resources []Resource
 		Instances []Instance
+	}
+
+	type Stack struct {
+		Name              string
+		Resources         []Resource
+		Instances         []Instance
+		AutoScalingGroups []AutoScalingGroup
 	}
 
 	var stackList []Stack
@@ -178,15 +187,20 @@ func stack(c *gin.Context) {
 				tStack.Instances = append(tStack.Instances, tInstance)
 				continue
 			case "AWS::AutoScaling::AutoScalingGroup":
+
+				tAutoScalingGroup := AutoScalingGroup{
+					Name: *resource.PhysicalResourceID,
+				}
+
 				instances := instancesByASG(*resource.PhysicalResourceID)
 
 				for _, instance := range instances {
 					tInstance := Instance{
 						InstanceID: *instance.InstanceID,
-						Name:       *resource.LogicalResourceID,
 					}
-					tStack.Instances = append(tStack.Instances, tInstance)
+					tAutoScalingGroup.Instances = append(tAutoScalingGroup.Instances, tInstance)
 				}
+				tStack.AutoScalingGroups = append(tStack.AutoScalingGroups, tAutoScalingGroup)
 				continue
 			}
 
@@ -203,16 +217,49 @@ func stack(c *gin.Context) {
 	}
 
 	obj := gin.H{"Stacks": stackList}
-	c.HTML(200, "layout_stack.tmpl", obj)
+	//c.HTML(200, "layout_stack.tmpl", obj)
+	//c.JSON(200, obj)
 
+	// websocket handler
+	onConnected := func(ws *websocket.Conn) {
+		var err error
+
+		//	for {
+
+		//var reply string
+		//if err = websocket.Message.Receive(ws, &reply); err != nil {
+		//	fmt.Println("Can't receive")
+		//	break
+		//}
+
+		//fmt.Println("Received back from client: " + reply)
+
+		//msg := "Received:  " + reply
+		json, _ := json.Marshal(obj)
+
+		if err = websocket.Message.Send(ws, string(json)); err != nil {
+			fmt.Println("Can't send")
+			//break
+		}
+		//	}
+	}
+
+	handler := websocket.Handler(onConnected)
+	handler.ServeHTTP(c.Writer, c.Request)
+
+}
+
+func layout(c *gin.Context) {
+	c.HTML(200, "layout_angular.tmpl", nil)
 }
 
 func main() {
 	// Creates a gin router + logger and recovery (crash-free) middlewares
 	r := gin.Default()
-	r.LoadHTMLGlob("templates/*")
+	r.LoadHTMLGlob("templates/*tmpl")
 	r.GET("/vpc", vpc)
 	r.GET("/stack", stack)
+	r.GET("/layout", layout)
 	r.Static("/assets", "./assets")
 
 	// Listen and server on 0.0.0.0:8080
