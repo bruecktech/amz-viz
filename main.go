@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/awslabs/aws-sdk-go/aws"
+	"github.com/awslabs/aws-sdk-go/gen/autoscaling"
 	"github.com/awslabs/aws-sdk-go/gen/cloudformation"
 	"github.com/awslabs/aws-sdk-go/gen/ec2"
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,7 @@ var (
 	creds = aws.DetectCreds("", "", "")
 	cli   = ec2.New(creds, "eu-west-1", nil)
 	cfn   = cloudformation.New(creds, "eu-west-1", nil)
+	asg   = autoscaling.New(creds, "eu-west-1", nil)
 )
 
 func resourcesByStackName(StackName string) []cloudformation.StackResource {
@@ -45,6 +47,17 @@ func instancesBySubnet(SubnetID string) []ec2.Instance {
 		instances = append(instances, reservation.Instances...)
 	}
 	return instances
+}
+
+func instancesByASG(AutoScalingGroupName string) []autoscaling.Instance {
+	resp, err := asg.DescribeAutoScalingGroups(&autoscaling.AutoScalingGroupNamesType{AutoScalingGroupNames: []string{
+		AutoScalingGroupName,
+	}})
+	if err != nil {
+		panic(err)
+	}
+
+	return resp.AutoScalingGroups[0].Instances
 }
 
 func tagByKey(tags []ec2.Tag, key string) string {
@@ -139,6 +152,7 @@ func stack(c *gin.Context) {
 	type Stack struct {
 		Name      string
 		Resources []Resource
+		Instances []Instance
 	}
 
 	var stackList []Stack
@@ -154,6 +168,27 @@ func stack(c *gin.Context) {
 
 		resources := resourcesByStackName(*stack.StackName)
 		for _, resource := range resources {
+
+			switch *resource.ResourceType {
+			case "AWS::EC2::Instance":
+				tInstance := Instance{
+					InstanceID: *resource.PhysicalResourceID,
+					Name:       *resource.LogicalResourceID,
+				}
+				tStack.Instances = append(tStack.Instances, tInstance)
+				continue
+			case "AWS::AutoScaling::AutoScalingGroup":
+				instances := instancesByASG(*resource.PhysicalResourceID)
+
+				for _, instance := range instances {
+					tInstance := Instance{
+						InstanceID: *instance.InstanceID,
+						Name:       *resource.LogicalResourceID,
+					}
+					tStack.Instances = append(tStack.Instances, tInstance)
+				}
+				continue
+			}
 
 			tResource := Resource{
 				Type:               *resource.ResourceType,
