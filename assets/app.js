@@ -17,6 +17,11 @@
       });
     };
 
+	// Log errors
+	conn.onerror = function (error) {
+	  console.log('WebSocket Error ' + error);
+	};
+
   }]);
 
 })();

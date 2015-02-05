@@ -12,7 +12,7 @@
       </div>
       <div class="asg" ng-repeat="asg in stack.AutoScalingGroups">
       [[asg.Name]]
-        <div class="instance" ng-repeat="instance in asg.Instances">
+        <div class="instance" data-ng-animate="'custom'" ng-repeat="instance in asg.Instances">
           [[instance.InstanceID]] ([[instance.Name]])
         </div>
       </div>

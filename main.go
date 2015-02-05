@@ -25,7 +25,7 @@ var (
 func resourcesByStackName(StackName string) []cloudformation.StackResource {
 	resp, err := cfn.DescribeStackResources(&cloudformation.DescribeStackResourcesInput{StackName: aws.String(StackName)})
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return resp.StackResources
 }
@@ -35,7 +35,7 @@ func subnetsByVPCID(VPCID string) []ec2.Subnet {
 		ec2.Filter{aws.String("vpc-id"), []string{VPCID}},
 	}})
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return resp.Subnets
 }
@@ -45,7 +45,7 @@ func instancesBySubnet(SubnetID string) []ec2.Instance {
 		ec2.Filter{aws.String("subnet-id"), []string{SubnetID}},
 	}})
 	if err != nil {
-		panic(err)
+		return nil
 	}
 
 	var instances []ec2.Instance
@@ -61,7 +61,7 @@ func instancesByASG(AutoScalingGroupName string) []autoscaling.Instance {
 		AutoScalingGroupName,
 	}})
 	if err != nil {
-		panic(err)
+		return nil
 	}
 
 	return resp.AutoScalingGroups[0].Instances
@@ -138,6 +138,8 @@ func vpc(c *gin.Context) {
 }
 
 func fetchData() {
+
+	fmt.Println("Fetching data")
 
 	type Instance struct {
 		InstanceID string
@@ -227,24 +229,13 @@ func fetchData() {
 func onConnected(ws *websocket.Conn) {
 	var err error
 
-	//	for {
-
-	//var reply string
-	//if err = websocket.Message.Receive(ws, &reply); err != nil {
-	//	fmt.Println("Can't receive")
-	//	break
-	//}
-
-	//fmt.Println("Received back from client: " + reply)
-
-	//msg := "Received:  " + reply
-	json, _ := json.Marshal(data)
-
-	if err = websocket.Message.Send(ws, string(json)); err != nil {
-		fmt.Println("Can't send")
-		//break
+	for {
+		json, _ := json.Marshal(data)
+		if err = websocket.Message.Send(ws, string(json)); err != nil {
+			fmt.Println("Can't send")
+		}
+		time.Sleep(10 * time.Second)
 	}
-	//	}
 }
 
 func stack(c *gin.Context) {
@@ -259,6 +250,7 @@ func main() {
 	fetchData()
 	c := cron.New()
 	c.AddFunc("@every 1m", fetchData)
+	c.Start()
 	// Creates a gin router + logger and recovery (crash-free) middlewares
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*tmpl")
