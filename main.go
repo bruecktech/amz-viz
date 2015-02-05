@@ -182,44 +182,49 @@ func fetchData() {
 		}
 
 		resources := resourcesByStackName(*stack.StackName)
-		for _, resource := range resources {
+		if resources != nil {
+			for _, resource := range resources {
 
-			switch *resource.ResourceType {
-			case "AWS::EC2::Instance":
-				tInstance := Instance{
-					InstanceID: *resource.PhysicalResourceID,
-					Name:       *resource.LogicalResourceID,
-				}
-				tStack.Instances = append(tStack.Instances, tInstance)
-				continue
-			case "AWS::AutoScaling::AutoScalingGroup":
-
-				tAutoScalingGroup := AutoScalingGroup{
-					Name: *resource.PhysicalResourceID,
-				}
-
-				instances := instancesByASG(*resource.PhysicalResourceID)
-
-				for _, instance := range instances {
+				switch *resource.ResourceType {
+				case "AWS::EC2::Instance":
 					tInstance := Instance{
-						InstanceID: *instance.InstanceID,
+						InstanceID: *resource.PhysicalResourceID,
+						Name:       *resource.LogicalResourceID,
 					}
-					tAutoScalingGroup.Instances = append(tAutoScalingGroup.Instances, tInstance)
+					tStack.Instances = append(tStack.Instances, tInstance)
+					continue
+				case "AWS::AutoScaling::AutoScalingGroup":
+
+					tAutoScalingGroup := AutoScalingGroup{
+						Name: *resource.PhysicalResourceID,
+					}
+
+					instances := instancesByASG(*resource.PhysicalResourceID)
+
+					if instances != nil {
+
+						for _, instance := range instances {
+							tInstance := Instance{
+								InstanceID: *instance.InstanceID,
+							}
+							tAutoScalingGroup.Instances = append(tAutoScalingGroup.Instances, tInstance)
+						}
+						tStack.AutoScalingGroups = append(tStack.AutoScalingGroups, tAutoScalingGroup)
+						continue
+					}
 				}
-				tStack.AutoScalingGroups = append(tStack.AutoScalingGroups, tAutoScalingGroup)
-				continue
+
+				tResource := Resource{
+					Type:               *resource.ResourceType,
+					LogicalResourceID:  *resource.LogicalResourceID,
+					PhysicalResourceID: *resource.PhysicalResourceID,
+				}
+
+				tStack.Resources = append(tStack.Resources, tResource)
 			}
 
-			tResource := Resource{
-				Type:               *resource.ResourceType,
-				LogicalResourceID:  *resource.LogicalResourceID,
-				PhysicalResourceID: *resource.PhysicalResourceID,
-			}
-
-			tStack.Resources = append(tStack.Resources, tResource)
+			stackList = append(stackList, tStack)
 		}
-
-		stackList = append(stackList, tStack)
 	}
 
 	data = gin.H{"Stacks": stackList}
