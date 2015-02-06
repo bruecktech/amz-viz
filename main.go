@@ -14,12 +14,14 @@ import (
 )
 
 var (
-	creds   = aws.DetectCreds("", "", "")
-	cli     = ec2.New(creds, "eu-west-1", nil)
-	cfn     = cloudformation.New(creds, "eu-west-1", nil)
-	asg     = autoscaling.New(creds, "eu-west-1", nil)
-	data    = gin.H{}
-	handler = websocket.Handler(onConnected)
+	creds        = aws.DetectCreds("", "", "")
+	cli          = ec2.New(creds, "eu-west-1", nil)
+	cfn          = cloudformation.New(creds, "eu-west-1", nil)
+	asg          = autoscaling.New(creds, "eu-west-1", nil)
+	dataVpc      = gin.H{}
+	dataStack    = gin.H{}
+	handlerVpc   = websocket.Handler(onConnectedVpc)
+	handlerStack = websocket.Handler(onConnectedStack)
 )
 
 func resourcesByStackName(StackName string) []cloudformation.StackResource {
@@ -77,7 +79,7 @@ func tagByKey(tags []ec2.Tag, key string) string {
 	return ""
 }
 
-func vpc(c *gin.Context) {
+func fetchDataVpc() {
 
 	type Instance struct {
 		InstanceID string
@@ -132,12 +134,10 @@ func vpc(c *gin.Context) {
 		vpcList = append(vpcList, tVPC)
 	}
 
-	obj := gin.H{"VPCs": vpcList}
-	c.HTML(200, "layout_vpc.tmpl", obj)
-
+	dataVpc = gin.H{"VPCs": vpcList}
 }
 
-func fetchData() {
+func fetchDataStack() {
 
 	fmt.Println("Fetching data")
 
@@ -227,15 +227,14 @@ func fetchData() {
 		}
 	}
 
-	data = gin.H{"Stacks": stackList}
+	dataStack = gin.H{"Stacks": stackList}
 }
 
-// websocket handler
-func onConnected(ws *websocket.Conn) {
+func onConnectedVpc(ws *websocket.Conn) {
 	var err error
 
 	for {
-		json, _ := json.Marshal(data)
+		json, _ := json.Marshal(dataVpc)
 		if err = websocket.Message.Send(ws, string(json)); err != nil {
 			fmt.Println("Can't send")
 		}
@@ -243,28 +242,43 @@ func onConnected(ws *websocket.Conn) {
 	}
 }
 
-func stack(c *gin.Context) {
-	handler.ServeHTTP(c.Writer, c.Request)
+func onConnectedStack(ws *websocket.Conn) {
+	var err error
+
+	for {
+		json, _ := json.Marshal(dataStack)
+		if err = websocket.Message.Send(ws, string(json)); err != nil {
+			fmt.Println("Can't send")
+		}
+		time.Sleep(10 * time.Second)
+	}
 }
 
-func layout(c *gin.Context) {
-	c.HTML(200, "layout_angular.tmpl", nil)
+func vpc(c *gin.Context) {
+	handlerVpc.ServeHTTP(c.Writer, c.Request)
+}
+
+func stack(c *gin.Context) {
+	handlerStack.ServeHTTP(c.Writer, c.Request)
 }
 
 func main() {
-	fetchData()
+	fetchDataVpc()
+	fetchDataStack()
+
 	c := cron.New()
-	c.AddFunc("@every 1m", fetchData)
+	c.AddFunc("@every 1m", fetchDataVpc)
+	c.AddFunc("@every 1m", fetchDataStack)
 	c.Start()
+
 	// Creates a gin router + logger and recovery (crash-free) middlewares
 	r := gin.Default()
-	r.LoadHTMLGlob("templates/*tmpl")
 	r.GET("/vpc", vpc)
 	r.GET("/stack", stack)
-	r.GET("/layout", layout)
 	r.Static("/assets", "./assets")
 
 	// Listen and server on 0.0.0.0:8080
 	r.Run(":8080")
+
 	c.Stop()
 }

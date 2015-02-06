@@ -1,8 +1,0 @@
-{{define "asgs"}}
-  {{ range $asg := .AutoScalingGroups }}
-  <div class="asg">
-    {{$asg.Name}}
-    {{template "instances" .}}
-  </div>
-  {{ end }}
-{{end}}
