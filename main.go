@@ -8,8 +8,9 @@ import (
 	"github.com/awslabs/aws-sdk-go/gen/autoscaling"
 	"github.com/awslabs/aws-sdk-go/gen/cloudformation"
 	"github.com/awslabs/aws-sdk-go/gen/ec2"
-	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron"
+	"log"
+	"net/http"
 	"time"
 )
 
@@ -18,8 +19,8 @@ var (
 	cli          = ec2.New(creds, "eu-west-1", nil)
 	cfn          = cloudformation.New(creds, "eu-west-1", nil)
 	asg          = autoscaling.New(creds, "eu-west-1", nil)
-	dataVpc      = gin.H{}
-	dataStack    = gin.H{}
+	dataVpc      = make(map[string]interface{})
+	dataStack    = make(map[string]interface{})
 	handlerVpc   = websocket.Handler(onConnectedVpc)
 	handlerStack = websocket.Handler(onConnectedStack)
 )
@@ -134,7 +135,7 @@ func fetchDataVpc() {
 		vpcList = append(vpcList, tVPC)
 	}
 
-	dataVpc = gin.H{"VPCs": vpcList}
+	dataVpc["VPCs"] = vpcList
 }
 
 func fetchDataStack() {
@@ -227,7 +228,7 @@ func fetchDataStack() {
 		}
 	}
 
-	dataStack = gin.H{"Stacks": stackList}
+	dataStack["Stacks"] = stackList
 }
 
 func onConnectedVpc(ws *websocket.Conn) {
@@ -254,14 +255,6 @@ func onConnectedStack(ws *websocket.Conn) {
 	}
 }
 
-func vpc(c *gin.Context) {
-	handlerVpc.ServeHTTP(c.Writer, c.Request)
-}
-
-func stack(c *gin.Context) {
-	handlerStack.ServeHTTP(c.Writer, c.Request)
-}
-
 func main() {
 	fetchDataVpc()
 	fetchDataStack()
@@ -271,14 +264,11 @@ func main() {
 	c.AddFunc("@every 1m", fetchDataStack)
 	c.Start()
 
-	// Creates a gin router + logger and recovery (crash-free) middlewares
-	r := gin.Default()
-	r.GET("/vpc", vpc)
-	r.GET("/stack", stack)
-	r.Static("/assets", "./assets")
+	http.Handle("/vpc", handlerVpc)
+	http.Handle("/stack", handlerStack)
+	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
 
-	// Listen and server on 0.0.0.0:8080
-	r.Run(":8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 
 	c.Stop()
 }
