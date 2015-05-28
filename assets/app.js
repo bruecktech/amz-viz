@@ -1,14 +1,11 @@
 (function(){
-  var app = angular.module('viz', [ ], function($interpolateProvider) {
-      $interpolateProvider.startSymbol('[[');
-      $interpolateProvider.endSymbol(']]');
-  });
+  var app = angular.module('viz', [ ]);
 
   app.controller('VpcController', [ '$scope', function($scope){
 
     $scope.vpcs = [ ] 
 
-    var conn = new WebSocket("ws://localhost:8080/vpc");
+    var conn = new WebSocket("ws://" + location.host + "/vpc");
 
     // called when a message is received from the server
     conn.onmessage = function(e){
@@ -29,7 +26,7 @@
 
     $scope.stacks = [ ] 
 
-    var conn = new WebSocket("ws://localhost:8080/stack");
+    var conn = new WebSocket("ws://" + location.host + "/stack");
 
     // called when a message is received from the server
     conn.onmessage = function(e){

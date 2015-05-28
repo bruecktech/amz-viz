@@ -267,6 +267,7 @@ func main() {
 	http.Handle("/vpc", handlerVpc)
 	http.Handle("/stack", handlerStack)
 	http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("assets"))))
+	http.Handle("/", http.StripPrefix("/", http.FileServer(http.Dir("."))))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 
